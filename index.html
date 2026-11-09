@@ -3,25 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude AI Chat</title>
+    <title>Claude AI Chat & History</title>
     <style>
         :root {
             --bg-color: #1a1a1a;
             --panel-bg: #2d2d2d;
+            --sidebar-bg: #202020;
             --text-color: #ffffff;
             --input-bg: #3d3d3d;
             --accent-color: #007acc;
             --user-msg: #0e639c;
             --ai-msg: #333333;
+            --active-chat: #3a3a3a;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             display: flex;
-            flex-direction: column;
             height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* Боковая панель чатов */
+        #sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        #chat-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .chat-item {
+            padding: 10px;
+            background-color: var(--panel-bg);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            overflow: hidden;
+        }
+        .chat-item span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            margin-right: 5px;
+        }
+        .chat-item.active { background-color: var(--active-chat); border-left: 4px solid var(--accent-color); }
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #ff4d4d;
+            cursor: pointer;
+            font-size: 14px;
+            width: auto;
+            padding: 0 5px;
+        }
+
+        /* Главная область */
+        #main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
         }
         header {
             background-color: var(--panel-bg);
@@ -34,10 +92,7 @@
             gap: 8px;
             margin-bottom: 8px;
         }
-        @media (max-width: 600px) {
-            .settings-grid { grid-template-columns: 1fr; }
-        }
-        input, select, button {
+        input, button {
             background-color: var(--input-bg);
             color: var(--text-color);
             border: 1px solid #555;
@@ -47,16 +102,9 @@
             width: 100%;
             outline: none;
         }
-        input:focus, select:focus { border-color: var(--accent-color); }
-        button {
-            background-color: var(--accent-color);
-            cursor: pointer;
-            font-weight: bold;
-            border: none;
-            transition: opacity 0.2s;
-        }
-        button:hover { opacity: 0.9; }
+        button { background-color: var(--accent-color); cursor: pointer; font-weight: bold; border: none; }
         button:disabled { background-color: #555; cursor: not-allowed; }
+        .new-chat-btn { background-color: #28a745; margin-bottom: 5px; }
         
         #chat-container {
             flex: 1;
@@ -76,7 +124,27 @@
         }
         .user { align-self: flex-end; background-color: var(--user-msg); }
         .ai { align-self: flex-start; background-color: var(--ai-msg); }
-        .system { align-self: center; background: none; color: #aaa; font-size: 12px; }
+        .system { align-self: center; background: none; color: #aaa; font-size: 12px; text-align: center; }
+        
+        code {
+            background-color: #111;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #ff79c6;
+        }
+        pre {
+            background-color: #111;
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        pre code {
+            padding: 0;
+            display: block;
+            color: #f8f8f2;
+        }
 
         footer {
             background-color: var(--panel-bg);
@@ -85,52 +153,74 @@
             gap: 8px;
             border-top: 1px solid #444;
         }
-        #user-input { flex: 1; resize: none; height: 40px; }
-        #send-btn { width: 80px; }
+        #user-input { flex: 1; }
+        #send-btn { width: 100px; }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #sidebar { width: 100%; height: 160px; border-right: none; border-bottom: 1px solid #444; }
+            .settings-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
 
-    <header>
-        <div class="settings-grid">
-            <input type="password" id="api-key" placeholder="API Key (sk-...)">
-            <input type="text" id="base-url" placeholder="Base URL (https://proxyapi.ru)">
-        </div>
-        <div class="settings-grid">
-            <input type="text" id="model-name" placeholder="Модель (например, anthropic/claude-sonnet-5-5)">
-            <button id="save-settings-btn" onclick="saveSettings()">💾 Сохранить настройки</button>
-        </div>
-    </header>
-
-    <div id="chat-container">
-        <div class="message system">Система готова. Заполните настройки выше, чтобы начать общение.</div>
+    <div id="sidebar">
+        <button class="new-chat-btn" onclick="createNewChat()">➕ Новый чат</button>
+        <div id="chat-list"></div>
     </div>
 
-    <footer>
-        <input type="text" id="user-input" placeholder="Введите сообщение..." onkeydown="if(event.key==='Enter') sendMessage()">
-        <button id="send-btn" onclick="sendMessage()">Отправить</button>
-    </footer>
+    <div id="main-content">
+        <header>
+            <div class="settings-grid">
+                <input type="password" id="api-key" placeholder="API Key (sk-...)">
+                <input type="text" id="base-url" placeholder="Base URL (https://proxyapi.ru)">
+            </div>
+            <div class="settings-grid">
+                <input type="text" id="model-name" placeholder="Модель (anthropic/claude-sonnet-5-5)">
+                <button onclick="saveSettings()">💾 Сохранить настройки</button>
+            </div>
+        </header>
+
+        <div id="chat-container"></div>
+
+        <footer>
+            <input type="text" id="user-input" placeholder="Введите сообщение..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <button id="send-btn" onclick="sendMessage()">Отправить</button>
+        </footer>
+    </div>
 
     <script>
-        let history = [];
+        let chats = {};
+        let currentChatId = null;
 
-        // Загрузка настроек при открытии страницы
         window.onload = function() {
             if (localStorage.getItem('proxy_api_key')) document.getElementById('api-key').value = localStorage.getItem('proxy_api_key');
             if (localStorage.getItem('proxy_base_url')) document.getElementById('base-url').value = localStorage.getItem('proxy_base_url');
-            if (localStorage.getItem('proxy_model_name')) {
-                document.getElementById('model-name').value = localStorage.getItem('proxy_model_name');
+            document.getElementById('model-name').value = localStorage.getItem('proxy_model_name') || 'anthropic/claude-sonnet-5-5';
+
+            const savedChats = localStorage.getItem('proxy_chats');
+            if (savedChats) {
+                chats = JSON.parse(savedChats);
+                const chatIds = Object.keys(chats);
+                if (chatIds.length > 0) {
+                    currentChatId = chatIds[chatIds.length - 1];
+                }
+            }
+
+            if (!currentChatId) {
+                createNewChat();
             } else {
-                document.getElementById('model-name').value = 'anthropic/claude-sonnet-5-5'; // Дефолтное рабочее имя
+                renderChatList();
+                renderMessages();
             }
         };
 
         function saveSettings() {
-            const key = document.getElementById('api-key').value.strip ? document.getElementById('api-key').value.strip() : document.getElementById('api-key').value.trim();
-            let url = document.getElementById('base-url').value.strip ? document.getElementById('base-url').value.strip() : document.getElementById('base-url').value.trim();
-            const model = document.getElementById('model-name').value.strip ? document.getElementById('model-name').value.strip() : document.getElementById('model-name').value.trim();
+            const key = document.getElementById('api-key').value.trim();
+            let url = document.getElementById('base-url').value.trim();
+            const model = document.getElementById('model-name').value.trim();
 
-            // Если пользователь забыл дописать эндпоинт к хосту, помогаем ему
             if (url && !url.endsWith('/chat/completions')) {
                 if (!url.endsWith('/v1')) {
                     if (url.endsWith('/')) url = url.slice(0, -1);
@@ -143,80 +233,89 @@
             localStorage.setItem('proxy_api_key', key);
             localStorage.setItem('proxy_base_url', url);
             localStorage.setItem('proxy_model_name', model);
-
-            appendMessage('system', '✅ Настройки успешно сохранены в браузере!');
+            alert('Настройки сохранены успешно!');
         }
 
-        function appendMessage(role, text) {
-            const container = document.getElementById('chat-container');
-            const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message', role);
-            msgDiv.textContent = text;
-            container.appendChild(msgDiv);
-            container.scrollTop = container.scrollHeight;
+        function createNewChat() {
+            const id = 'chat_' + Date.now();
+            chats[id] = {
+                title: 'Новый диалог',
+                messages: []
+            };
+            currentChatId = id;
+            saveChatsToStorage();
+            renderChatList();
+            renderMessages();
         }
 
-        async function sendMessage() {
-            const inputEl = document.getElementById('user-input');
-            const sendBtn = document.getElementById('send-btn');
-            const text = inputEl.value.trim();
-            
-            if (!text) return;
+        function switchChat(id) {
+            currentChatId = id;
+            renderChatList();
+            renderMessages();
+        }
 
-            const apiKey = localStorage.getItem('proxy_api_key');
-            const baseUrl = localStorage.getItem('proxy_base_url');
-            const modelName = localStorage.getItem('proxy_model_name');
-
-            if (!apiKey || !baseUrl || !modelName) {
-                alert('Сначала заполните настройки и нажмите кнопку "Сохранить настройки"!');
-                return;
+        function deleteChat(id, event) {
+            event.stopPropagation();
+            delete chats[id];
+            const chatIds = Object.keys(chats);
+            if (currentChatId === id) {
+                currentChatId = chatIds.length > 0 ? chatIds[chatIds.length - 1] : null;
             }
-
-            // Отображаем сообщение пользователя
-            appendMessage('user', text);
-            inputEl.value = '';
-            
-            // Блокируем интерфейс на время запроса
-            inputEl.disabled = true;
-            sendBtn.disabled = true;
-
-            // Добавляем реплику в контекст
-            history.push({"role": "user", "content": text});
-
-            try {
-                const response = await fetch(baseUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        'model': modelName,
-                        'messages': history
-                    })
-                });
-
-                if (!response.ok) {
-                    const errData = await response.text();
-                    throw new Error(`Код ${response.status}: ${errData}`);
-                }
-
-                const data = await response.json();
-                const aiText = data.choices[0].message.content;
-
-                // Отображаем ответ ИИ и сохраняем в историю
-                appendMessage('ai', aiText);
-                history.push({"role": "assistant", "content": aiText});
-
-            } catch (error) {
-                appendMessage('system', `❌ Ошибка запроса: ${error.message}`);
-                history.pop(); // Удаляем последний запрос из памяти, раз он упал
-            } finally {
-                inputEl.disabled = false;
-                sendBtn.disabled = false;
-                inputEl.focus();
+            if (!currentChatId) {
+                createNewChat();
+            } else {
+                saveChatsToStorage();
+                renderChatList();
+                renderMessages();
             }
         }
-    </script>
-</body>
-</html>
+
+        function saveChatsToStorage() {
+            localStorage.setItem('proxy_chats', JSON.stringify(chats));
+        }
+
+        function renderChatList() {
+            const listContainer = document.getElementById('chat-list');
+            listContainer.innerHTML = '';
+            Object.keys(chats).forEach(id => {
+                const item = document.createElement('div');
+                item.classList.add('chat-item');
+                if (id === currentChatId) item.classList.add('active');
+                item.onclick = () => switchChat(id);
+
+                const titleSpan = document.createElement('span');
+                titleSpan.textContent = chats[id].title;
+                item.appendChild(titleSpan);
+
+                const delBtn = document.createElement('button');
+                delBtn.classList.add('delete-btn');
+                delBtn.innerHTML = '🗑️';
+                delBtn.onclick = (e) => deleteChat(id, e);
+                item.appendChild(delBtn);
+
+                listContainer.appendChild(item);
+            });
+        }
+
+        function formatMarkdown(text) {
+
+        throw new Error(Код ${response.status}: ${errText});
+}
+const data = await response.json();
+const aiText = data.choices[0].message.content;
+chats[currentChatId].messages.push({"role": "assistant", "content": aiText});
+saveChatsToStorage();
+renderMessages();
+} catch (error) {
+const container = document.getElementById('chat-container');
+const errDiv = document.createElement('div');
+errDiv.classList.add('message', 'system');
+errDiv.textContent = ❌ Ошибка: ${error.message};
+container.appendChild(errDiv);
+chats[currentChatId].messages.pop();
+} finally {
+inputEl.disabled = false;
+sendBtn.disabled = false;
+inputEl.focus();
+}
+        }
