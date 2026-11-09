@@ -87,26 +87,35 @@
             b.scrollTop = b.scrollHeight;
         }
         async function send() {
-            const i = document.getElementById('inp'), b = document.getElementById('btn'), t = i.value.trim();
-            if (!t) return;
-            const k = localStorage.getItem('pk'), u = localStorage.getItem('pu'), m = localStorage.getItem('pm');
-            if (!k || !u) { alert('Настройте API!'); return; }
-            i.value = ''; i.disabled = b.disabled = true;
-            if (!chats[curId].messages.length) { chats[curId].title = t.substring(0,15); loadList(); }
-            chats[curId].messages.push({role: 'user', content: t}); loadMsgs();
-            try {
-                const res = await fetch(u, {
-                    method: 'POST', headers: { 'Authorization': `Bearer ${k}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: m, messages: chats[curId].messages })
-                });
-                if (!res.ok) throw new Error(res.status);
-                const data = await res.json();
-                chats[curId].messages.push({role: 'assistant', content: data.choices[0].message.content});
-                save(); loadMsgs();
-            } catch (e) {
-                document.getElementById('box').innerHTML += `<div class="sys">Ошибка: ${e.message}</div>`;
-                chats[curId].messages.pop();
-            } finally { i.disabled = b.disabled = false; i.focus(); }
+    const i = document.getElementById('inp'), b = document.getElementById('btn'), t = i.value.trim();
+    if (!t) return;
+    const k = localStorage.getItem('pk'), u = localStorage.getItem('pu'), m = localStorage.getItem('pm');
+    if (!k || !u) { alert('Настройте API!'); return; }
+    i.value = ''; i.disabled = b.disabled = true;
+    if (!chats[curId].messages.length) { chats[curId].title = t.substring(0,15); loadList(); }
+    chats[curId].messages.push({role: 'user', content: t}); loadMsgs();
+    try {
+        const res = await fetch(u, {
+            method: 'POST', 
+            headers: { 'Authorization': `Bearer ${k}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                model: m, 
+                messages: chats[curId].messages,
+                max_tokens: 4096 // Решает проблему с обрывом кода! Клод допишет всё до конца
+            })
+        });
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        
+        // Безопасное извлечение ответа (работает и с choices[0], и без него)
+        const aiMsg = data.choices && data.choices[0] ? data.choices[0].message.content : data.choices.message.content;
+        
+        chats[curId].messages.push({role: 'assistant', content: aiMsg});
+        save(); loadMsgs();
+    } catch (e) {
+        document.getElementById('box').innerHTML += `<div class="sys">Ошибка: ${e.message}</div>`;
+        chats[curId].messages.pop();
+    } finally { i.disabled = b.disabled = false; i.focus(); }
         }
     </script>
 </body>
