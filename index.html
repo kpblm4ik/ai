@@ -101,7 +101,7 @@
             body: JSON.stringify({ 
                 model: m, 
                 messages: chats[curId].messages,
-                max_tokens: 4096 // Решает проблему с обрывом кода! Клод допишет всё до конца
+                max_tokens: 8192 // Решает проблему с обрывом кода! Клод допишет всё до конца
             })
         });
         if (!res.ok) throw new Error(res.status);
